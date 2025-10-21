@@ -9,3 +9,8 @@ Contiene una interfaz con tres botones (`TP`, `TP2`, `TRAS`) que permiten realiz
 
 ## 📂 Estructura del proyecto
 
+src/
+├── gui/
+│ └── ScreenGui.rbxmx
+└── scripts/
+└── ApacheHub.client.lua
