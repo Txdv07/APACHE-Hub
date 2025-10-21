@@ -1,0 +1,120 @@
+-- LocalScript (StarterGui -> APACHE_GUI)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+local remoteTP = ReplicatedStorage:WaitForChild("APACHE_TP")
+local remoteKill = ReplicatedStorage:WaitForChild("APACHE_KILL")
+local remoteCollect = ReplicatedStorage:WaitForChild("APACHE_COLLECT")
+
+local gui = script.Parent
+local frame = gui:WaitForChild("Frame")
+local tpBtn = frame:WaitForChild("TPBtn")
+local tp2Btn = frame:WaitForChild("TP2Btn")
+local trasBtn = frame:WaitForChild("TRASBtn")
+local targetLabel = frame:WaitForChild("TargetLabel")
+
+-- Config
+local SCAN_INTERVAL = 1
+local MAX_SEARCH_DISTANCE = 300
+local CLICK_DEBOUNCE = 1
+
+local allowedNames = {
+    shark = true,
+    orca = true,
+    ["white shark"] = true,
+    ["moby wood"] = true,
+    ["neon shark"] = true,
+    ["neon orca"] = true
+}
+
+local lastClick = 0
+
+local function getCharacterRoot(plr)
+    local ch = plr.Character
+    if not ch then return nil end
+    return ch:FindFirstChild("HumanoidRootPart") or ch:FindFirstChild("Torso") or ch:FindFirstChild("UpperTorso")
+end
+
+local function isAllowedMobName(name)
+    if not name then return false end
+    return allowedNames[string.lower(name)] == true
+end
+
+local function findNearestMob()
+    local root = getCharacterRoot(player)
+    if not root then return nil, nil end
+    local best, bestDist = nil, math.huge
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and isAllowedMobName(obj.Name) then
+            local primary = obj.PrimaryPart or obj:FindFirstChild("HumanoidRootPart") or obj:FindFirstChildWhichIsA("BasePart")
+            if primary then
+                local dist = (primary.Position - root.Position).Magnitude
+                if dist < bestDist then
+                    bestDist = dist
+                    best = obj
+                end
+            end
+        end
+    end
+    if best and bestDist <= MAX_SEARCH_DISTANCE then
+        return best, bestDist
+    end
+    return nil, nil
+end
+
+-- Update label loop
+spawn(function()
+    while true do
+        local mob, dist = findNearestMob()
+        if mob then
+            targetLabel.Text = "Objetivo: "..mob.Name.." ("..math.floor(dist).." studs)"
+        else
+            targetLabel.Text = "Objetivo: ninguno cercano"
+        end
+        wait(SCAN_INTERVAL)
+    end
+end)
+
+local function sendToServer(remote, mob)
+    if tick() - lastClick < CLICK_DEBOUNCE then return end
+    lastClick = tick()
+    if not mob or not mob:IsA("Model") then
+        targetLabel.Text = "No hay mob objetivo"
+        return
+    end
+    local primary = mob.PrimaryPart or mob:FindFirstChild("HumanoidRootPart") or mob:FindFirstChildWhichIsA("BasePart")
+    if not primary then
+        targetLabel.Text = "Mob sin PrimaryPart"
+        return
+    end
+    -- Mandamos la referencia de la instancia (Roblox la serializa) y posición de respaldo
+    remote:FireServer(mob, primary.Position)
+end
+
+tpBtn.MouseButton1Click:Connect(function()
+    local mob = findNearestMob()
+    if mob then
+        sendToServer(remoteTP, mob)
+    else
+        targetLabel.Text = "No hay mob cercano para TP"
+    end
+end)
+
+tp2Btn.MouseButton1Click:Connect(function()
+    local mob = findNearestMob()
+    if mob then
+        sendToServer(remoteKill, mob)
+    else
+        targetLabel.Text = "No hay mob cercano para TP2"
+    end
+end)
+
+trasBtn.MouseButton1Click:Connect(function()
+    local mob = findNearestMob()
+    if mob then
+        sendToServer(remoteCollect, mob)
+    else
+        targetLabel.Text = "No hay mob cercano para TRAS"
+    end
+end)
